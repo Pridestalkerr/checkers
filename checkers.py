@@ -3,21 +3,52 @@ from typing import List, Tuple, NamedTuple
 
 
 
-class Pair(NamedTuple):
-    row: int
-    col: int
-
-    def __add__(self, other: "Pair") -> "Pair":
-        return Pair(self.row + other.row, self.col + other.col)
-
-    def is_jump(self) -> bool:
-        return abs(row) == 2
-
-    def is_move(self) -> bool:
-        return abs(row) == 1
-
 
 class Checkers:
+
+
+    class Pair(NamedTuple):
+        row: int
+        col: int
+
+        def __add__(self, other: "Pair") -> "Pair":
+            return Checkers.Pair(self.row + other.row, self.col + other.col)
+
+        def __sub__(self, other: "Pair") -> "Pair":
+            return Checkers.Pair(self.row - other.row, self.col - other.col)
+
+        def is_jump(self) -> bool:
+            return abs(self.row) == 2 and abs(self.col) == 2
+
+        def is_move(self) -> bool:
+            return abs(self.row) == 1 and abs(self.col) == 1
+
+
+    class MoveOutcome(NamedTuple):
+        success: bool
+        promoted: bool
+        location: "Pair"
+
+
+    class Move(NamedTuple):
+        row: int
+        col: int
+
+
+
+
+
+
+    default_board = [
+        [0, -1, 0, -1, 0, -1, 0, -1],
+        [-1, 0, -1, 0, -1, 0, -1, 0],
+        [0, -1, 0, -1, 0, -1, 0, -1],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 1, 0, 1, 0, 1, 0],
+        [0, 1, 0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 0]
+    ]
 
     black_moves = [Pair(-1, -1), Pair(-1, 1)]
     black_jumps = [Pair(-2, -2), Pair(-2, 2)]
@@ -35,7 +66,8 @@ class Checkers:
     empty = 0
     size = 8
 
-    def __init__(self, board: List[List[int]]) -> None:
+
+    def __init__(self, board: List[List[int]] = default_board) -> None:
         self.board = copy.deepcopy(board)
         self.black_score = 0
         self.white_score = 0
@@ -77,13 +109,13 @@ class Checkers:
         if pawn == Checkers.empty:
             return False #spot is empty
 
-        if is_king(pawn):
+        if self.is_king(pawn):
             return False #already promoted
 
-        if is_black(pawn):
+        if self.is_black(pawn):
             if origin.row == 0:
                 return True #can promote at row 0
-        elif is_white(pawn):
+        elif self.is_white(pawn):
             if origin.row == Checkers.size - 1:
                 return True #can promote at row size - 1
 
@@ -96,9 +128,9 @@ class Checkers:
 
         #increase the player's score
         pawn = self.board[origin.row][origin.col]
-        if is_black(pawn):
+        if self.is_black(pawn):
             self.black_score += 1
-        elif is_white(pawn):
+        elif self.is_white(pawn):
             self.white_score -= 1
 
         return True
@@ -149,7 +181,7 @@ class Checkers:
             return False
 
 
-    def move(self, origin: Pair, move: Pair) -> Tuple[bool, bool]: #returns the value of valid_move()
+    def move(self, origin: Pair, move: Pair) -> MoveOutcome: #returns the value of valid_move()
         if not self.valid_move(origin, move):
             return (False, False)
 
@@ -158,7 +190,7 @@ class Checkers:
         self.board[origin.row][origin.col] = Checkers.empty
 
         #promote if needed
-        promoted = self.promote(origin) #we could return this as well
+        promoted = self.promote(Checkers.Pair(origin.row + move.row, origin.col + move.col)) #we could return this as well
 
         return (True, promoted)
 
@@ -192,7 +224,7 @@ class Checkers:
             return False
 
 
-    def jump(self, origin: Pair, jump: Pair) -> Tuple[bool, bool]: #returns the value of valid_jump() and whether the pawn promoted or not
+    def jump(self, origin: Pair, jump: Pair) -> MoveOutcome: #returns the value of valid_jump() and whether the pawn promoted or not
         if not self.valid_jump(origin, jump):
             return (False, False)
 
@@ -210,7 +242,7 @@ class Checkers:
             self.white_score -= enemy_pawn
             self.white_count -= 1
 
-        promoted = self.promote(origin) #we could return this as well
+        promoted = self.promote(Checkers.Pair(origin.row + jump.row, origin.col + jump.col)) #we could return this as well
 
         return (True, promoted)
 
@@ -243,7 +275,7 @@ class Checkers:
         for i, row in enumerate(self.board):
             for j, pawn in enumerate(row):
                 if self.is_white(pawn):
-                    origin = Pair(i, j)
+                    origin = Checkers.Pair(i, j)
                     moves = self.get_valid_moves(origin)
                     if moves:
                         all_moves.append((origin, moves))
@@ -257,7 +289,7 @@ class Checkers:
         for i, row in enumerate(self.board):
             for j, pawn in enumerate(row):
                 if self.is_black(pawn):
-                    origin = Pair(i, j)
+                    origin = Checkers.Pair(i, j)
                     moves = self.get_valid_moves(origin)
                     if moves:
                         all_moves.append((origin, moves))
@@ -271,7 +303,7 @@ class Checkers:
         for i, row in enumerate(self.board):
             for j, pawn in enumerate(row):
                 if self.is_white(pawn):
-                    origin = Pair(i, j)
+                    origin = Checkers.Pair(i, j)
                     jumps = self.get_valid_jumps(origin)
                     if jumps:
                         all_jumps.append((origin, jumps))
@@ -285,7 +317,7 @@ class Checkers:
         for i, row in enumerate(self.board):
             for j, pawn in enumerate(row):
                 if self.is_black(pawn):
-                    origin = Pair(i, j)
+                    origin = Checkers.Pair(i, j)
                     jumps = self.get_valid_jumps(origin)
                     if jumps:
                         all_jumps.append((origin, jumps))
@@ -312,8 +344,29 @@ class Checkers:
         for i, row in enumerate(self.board):
             for j, pawn in enumerate(row):
                 if not self.are_enemies(pawn, player):
-                    if self.get_valid_jumps(Pair(i, j)):
+                    if self.get_valid_jumps(Checkers.Pair(i, j)):
                         #there are available jumps, therefore player cannot move
                         return False
 
         return True
+
+
+    def white_won(self) -> bool:
+        return self.black_count == 0
+
+
+    def black_won(self) -> bool:
+        return self.white_count == 0
+
+
+    def won(self, player) -> bool:
+        if self.black_count == 0:
+            return Checkers.black
+        elif self.white_count == 0:
+            return Checkers.white
+        else:
+            return None
+
+
+    #def get_jump_sequences(self) -> List[Jump_seq]:
+
