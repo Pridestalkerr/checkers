@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import pygame
 
-from typing import List, Tuple, NamedTuple
+from typing import List, Tuple, NamedTuple, Callable
 
 from checkers import *
 from gameui import *
@@ -33,6 +35,11 @@ class Game:
         self.ui = GameUI(background_color = background_color, border_color = border_color, black_cell_color = black_cell_color, white_cell_color = white_cell_color, border_size = border_size, auto_init = False)
 
         #self.cli = Gamecli()
+
+        self.difficulty = 5
+
+        self.pc = Checkers.white
+        self.player = Checkers.black
 
 
 
@@ -68,6 +75,8 @@ class Game:
                                     self.ui.draw_winner("black")
                                     self.ui.update()
 
+                            print(self.board)
+
 
                             #self.ui.remove_pawn(*Checkers.Pair(*selected))
                             selected = None
@@ -87,6 +96,7 @@ class Game:
                         # pc won with a jump
                         self.ui.draw_winner("pc")
                         self.ui.update()
+                        print(self.board)
 
 
             
@@ -122,13 +132,13 @@ class Game:
 
     def pc_turn(self) -> None:
         #apply minimax
-        origin, move = self.get_best_move()[-2:]
+        origin, move = self.get_best_move(self.pc, self.alpha_beta, self.difficulty)
         print("pc moved:")
         print(origin, move)
-        if abs(move.row) == 2 or abs(move.col) == 2:
-            print(self.board.jump(origin, move))
-        else:
-            print(self.board.move(origin, move))
+
+        print(self.board.apply(origin, move))
+
+        print(self.board)
 
 
     def turn(self, player: bool) -> None:
@@ -138,254 +148,124 @@ class Game:
             self.pc_turn()
 
 
-    def get_best_move(self) -> Tuple[Checkers.Pair, Checkers.Pair]:
-        value, origin, move = self.minimax(self.board, Checkers.white, 6)
+    # think of this function as the 0th level of the tree
+    # it is just a minimax/alpha-beta iteration,
+    # as the actual minimax/alpha-beta functions only return the heuristic
+    # values of the nodes, this iteration will take care of also returning the best move/jump
+    # NEGAMAX BABYYYYYYYYYY
+    def get_best_move(self, player: int, algorithm: Callable, depth: int) -> (Checkers.Location, Checkers.Move):
+        if self.board.won():
+            return None
 
-        return (origin, move)
+        # determine whether the player is allowed to move, or if he must jump
+        player_moves: (Location, List[Jump]) = self.board.get_jumps(player = player, recursive = True)
+        if not player_moves:
+            player_moves: (Location, List[Move]) = self.board.get_moves(player = player)
+
+        best_value = -inf
+        best_option = None
+        print(player_moves)
+        for location, moves in player_moves:
+            for move in moves:
+                # generate the new board configuration
+                new_board = copy.deepcopy(self.board)
+                new_board.apply(location, move)
+
+                path_value = -algorithm(new_board, -player, depth - 1)
+
+                # check if the computed path is worth it
+                if path_value >= best_value:
+                    print("OKOKOKOKOK")
+                    best_value = path_value
+                    best_option = (location, move)
+
+        # we iterated all of the available moves, return the best
+        print(best_value, "###############")
+        print(best_option)
+        return best_option
 
 
-    def minimax(self, board: Checkers, player: int, depth: int, jump_lock: Checkers.Pair = None) -> List[int]: #returns best move/jump
-        if board.get_white_count() == 0:
-            return [-inf, None, None] #absolute loss
 
-        if board.get_black_count() == 0:
-            return [inf, None, None] #absolute win
+
+
+
+
+
+    def negamax(self, board: Checkers, player: Checkers.Player, depth: int) -> int:
+        winner = self.board.won()
+        if winner:
+            return inf if winner == player else -inf
 
         if depth == 0:
-            return [board.get_score(player) - board.get_score(-player), None, None] #return heuristic value of leaf node
+            return self.heuristic(player, board)
 
-        if player == Checkers.white: #pc, maximizes
-            value = -inf
+        # determine whether the player is allowed to move, or if he must jump
+        player_moves: (Location, List[Jump]) = board.get_jumps(player = player)
+        if not player_moves:
+            player_moves: (Location, List[Move]) = board.get_moves(player = player)
 
-            if jump_lock:
-                #we're stuck in a jump sequence
-                jumps = board.get_valid_jumps(jump_lock) #compute the available jumps for this pawn
+        best_value = -inf
+        for location, moves in player_moves:
+            for move in moves:
+                # generate the new board configuration
+                new_board = copy.deepcopy(board)
+                new_board.apply(location, move)
 
-                if jumps:
-                    #we have available jumps, continue the jump sequence
-                    best_jump = None
-                    for jump in jumps:
-                        #generate the new board configuration
-                        new_board = copy.deepcopy(board)
-                        promoted = new_board.jump(jump_lock, jump)[1]
+                best_value = max(best_value, -self.negamax(new_board, -player, depth - 1))
 
-                        if promoted:
-                            #end the jump sequence
-                            path_value = self.minimax(new_board, Checkers.black, depth - 1)[0]
-                        else:
-                            #continue jump sequence
-                            path_value = self.minimax(new_board, Checkers.white, depth, jump_lock + jump)[0]
-
-                        #check if the computed path is worth it
-                        if path_value > value:
-                            value = path_value
-                            best_jump = jump
-
-                    #we iterated all of the available jumps, return the best
-                    return [value, jump_lock, best_jump]     
-
-                else:
-                    #we dont have any available jumps
-                    #turn to the other player
-                    return self.minimax(board, Checkers.black, depth - 1)
-
-            else:
-
-                jumps = board.get_all_white_jumps()
-
-                if jumps:
-                    best_jump = None
-                    best_origin = None
-                    #we have available jumps
-                    for origin, jumplist in jumps:
-                        for jump in jumplist:
-                            #generate the new board configuration
-                            new_board = copy.deepcopy(board)
-                            promoted = new_board.jump(origin, jump)[1]
-
-                            if promoted:
-                                #doesnt enter a jump sequence
-                                path_value = self.minimax(new_board, Checkers.black, depth - 1)[0]
-                            else:
-                                #we enter a POSSIBLE jump sequence
-                                path_value = self.minimax(new_board, Checkers.white, depth, origin + jump)[0]
-
-                            #check if the computed path is worth it
-                            if path_value > value:
-                                value = path_value
-                                best_jump = jump
-                                best_origin = origin
-
-                    #we iterated all of the available jumps, return the best
-                    return [value, best_origin, best_jump]
-                else:
-                    best_move = None
-                    best_origin = None
-                    #no jumps available, iterate the possible moves
-                    moves = board.get_all_white_moves()
-                    for origin, movelist in moves:
-                        for move in movelist:
-                            #generate the new board configuration
-                            new_board = copy.deepcopy(board)
-                            new_board.move(origin, move)
-
-                            path_value = self.minimax(new_board, Checkers.black, depth - 1)[0]
-                            
-                            #check if the computed path is worth it
-                            if path_value > value:
-                                value = path_value
-                                best_move = move
-                                best_origin = origin
-
-                    #we iterated all of the available moves, return the best
-                    return [value, best_origin, best_move]
-
-        elif player == Checkers.black:
-            value = inf
-
-            if jump_lock:
-                #we're stuck in a jump sequence
-                jumps = board.get_valid_jumps(jump_lock) #compute the available jumps for this pawn
-
-                if jumps:
-                    #we have available jumps, continue the jump sequence
-                    best_jump = None
-                    for jump in jumps:
-                        #generate the new board configuration
-                        new_board = copy.deepcopy(board)
-                        promoted = new_board.jump(jump_lock, jump)[1]
-
-                        if promoted:
-                            #end the jump sequence
-                            path_value = self.minimax(new_board, Checkers.white, depth - 1)[0]
-                        else:
-                            #continue jump sequence
-                            path_value = self.minimax(new_board, Checkers.black, depth, jump_lock + jump)[0]
-
-                        #check if the computed path is worth it
-                        if path_value < value:
-                            value = path_value
-                            best_jump = jump
-
-                    #we iterated all of the available jumps, return the best
-                    return [value, jump_lock, best_jump]     
-
-                else:
-                    #we dont have any available jumps
-                    #turn to the other player
-                    return self.minimax(board, Checkers.white, depth - 1)
-
-            else:
-
-                jumps = board.get_all_black_jumps()
-
-                if jumps:
-                    best_jump = None
-                    best_origin = None
-                    #we have available jumps
-                    for origin, jumplist in jumps:
-                        for jump in jumplist:
-                            #generate the new board configuration
-                            new_board = copy.deepcopy(board)
-                            promoted = new_board.jump(origin, jump)[1]
-
-                            if promoted:
-                                #doesnt enter a jump sequence
-                                path_value = self.minimax(new_board, Checkers.white, depth - 1)[0]
-                            else:
-                                #we enter a POSSIBLE jump sequence
-                                path_value = self.minimax(new_board, Checkers.black, depth, origin + jump)[0]
-
-                            #check if the computed path is worth it
-                            if path_value < value:
-                                value = path_value
-                                best_jump = jump
-                                best_origin = origin
-
-                    #we iterated all of the available jumps, return the best
-                    return [value, best_origin, best_jump]
-                else:
-                    best_move = None
-                    best_origin = None
-                    #no jumps available, iterate the possible moves
-                    moves = board.get_all_black_moves()
-                    for origin, movelist in moves:
-                        for move in movelist:
-                            #generate the new board configuration
-                            new_board = copy.deepcopy(board)
-                            new_board.move(origin, move)
-
-                            path_value = self.minimax(new_board, Checkers.white, depth - 1)[0]
-                            
-                            #check if the computed path is worth it
-                            if path_value < value:
-                                value = path_value
-                                best_move = move
-                                best_origin = origin
-
-                    #we iterated all of the available moves, return the best
-                    return [value, best_origin, best_move]
+        # we iterated all of the available moves, return the best
+        return best_value
 
 
 
-    # def alpha_beta(self, board: Checkers, player: int, depth: int, alpha: int = -inf, beta: int = inf, jump_lock: Checkers.Pair = None) -> (int, int, int): # returns best move/jump?:
-    #     if board.get_white_count() == 0:
-    #         return (-inf, None, None) #absolute loss
-
-    #     if board.get_black_count() == 0:
-    #         return (inf, None, None) #absolute win
-
-    #     if depth == 0:
-    #         return (self.heuristic(board), None, None) #return heuristic value of leaf node
+    
 
 
-    #     # prioritize moves that end in a promotion, requires some sorting of sort,
-    #     # must check if sorting on every node is better than pruning (it should be for huge depths)
+    def alpha_beta(self, board: Checkers, player: Checkers.Player, depth: int, alpha: int = -inf, beta: int = inf) -> int:
+        winner = self.board.won()
+        if winner:
+            return inf if winner == player else -inf
 
+        if depth == 0:
+            return self.heuristic(player, board)
 
-    #     if player == Checkers.white:
-    #         # pc, maximizes
-    #         best_option = -inf
-    #         extrema = max
-    #     elif player == Checkers.black:
-    #         # player, minimizes
-    #         best_option = inf
-    #         extrema = min
+        # prioritize moves that end in a promotion, requires some sorting of sort,
+        # must check if sorting on every node is better than pruning (it should be for huge depths)
+        player_moves: (Location, List[Jump]) = board.get_jumps(player = player, recursive = True)
+        if not player_moves:
+            player_moves: (Location, List[Move]) = board.get_moves(player = player)
 
-    #     # smart man
-    #     if jump_lock:
-    #         #we're stuck in a jump sequence
-    #         jumps = board.get_valid_jumps(jump_lock) #compute the available jumps for this pawn
+        best_value = -inf
+        for location, moves in player_moves:
+            for move in moves:
+                # generate the new board configuration
+                new_board = copy.deepcopy(board)
+                new_board.apply(location, move)
 
-    #         if jumps:
-    #             #we have available jumps, continue the jump sequence
-                
-    #             for jump in jumps:
-    #                 #generate the new board configuration
-    #                 new_board = copy.deepcopy(board)
-    #                 if new_board.jump(jump_lock, jump).promoted:
-    #                     #end the jump sequence
-    #                     path = self.minimax(new_board, -player, depth - 1)
-    #                 else:
-    #                     #continue jump sequence, do not decrease depth
-    #                     path = self.minimax(new_board, player, depth, jump_lock + jump)
+                best_value = max(best_value, -self.alpha_beta(new_board, -player, depth - 1, -beta, -alpha))
+                alpha = max(alpha, best_value)
 
-    #                 best_option = extrema(best_option, path, key = lambda x: x[0])
+                if alpha >= beta:
+                    # cut-off
+                    break
 
-    #             #we iterated all of the available jumps, return the best
-    #             return [best_option[0], jump_lock, best_option[2]]     
-
-    #         else:
-    #             #we dont have any available jumps
-    #             #turn to the other player
-    #             return self.minimax(board, -player, depth - 1)
+        # we iterated all of the available moves, return the best
+        return best_value
 
 
 
 
-    def heuristic(self, board: Checkers = None) -> int:
-        if board:
-            return board.get_score(player) - board.get_score(-player)
-        else:
-            return self.get_score(player) - self.get_score(-player)
+
+
+
+
+
+
+
+    # negamax heuristic
+    def heuristic(self, player: Player, board: Checkers = None) -> int:
+        if not board:
+            board = self.board
+
+        return (board.get_count(player) - board.get_count(-player))*100 + (board.get_kings_count(player) - board.get_kings_count(-player))*50
 

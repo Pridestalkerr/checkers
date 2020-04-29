@@ -68,5 +68,11 @@ if __name__ == "__main__":
     game = Game(background_color = (48, 25, 52), border_color = (120, 24, 74), black_cell_color = (48, 25, 52), white_cell_color = (120, 24, 74), border_size = 1)
     game.run()
 
+    #print(game.board)
+
+
+
+    
+    #print(game.board.get_jump_sequences_for_pawn(Checkers.Location(1, 0)))
 
 

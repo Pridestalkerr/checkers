@@ -1,5 +1,5 @@
 import pygame
-
+import checkers
 
 
 class GameUI:
@@ -44,6 +44,7 @@ class GameUI:
         self.black_cell_color = black_cell_color
         self.white_cell_color = white_cell_color
         self.font_color = font_color
+        self.highlight = (248, 222, 126)
 
 
         # ----
@@ -119,16 +120,28 @@ class GameUI:
                     board.blit(self.black_cell, (self.mapIndexToCoord(i, j)))
 
 
+    # def highlight(self, cell: "pygame.Surface", color: color) ->  None:
+    #     # top line
+    #     cell.blit(rect(screen, color, [0,0,width,line_width]))
+    #     # bottom line
+    #     cell.blit(rect(screen, color, [0,height,width,line_width]))
+    #     # left line
+    #     cell.blit(rect(screen, color, [0,0,line_width, height]))
+    #     # right line
+    #     cell.blit(rect(screen, color, [width,0,line_width, height+line_width]))
+
+
+
     def draw_pawns_on(self, config: "Checkers", board: "pygame.Surface") -> None:
         for i in range(8):
             for j in range(8):
-                if config.is_black(config.board[i][j]):
-                    if config.is_king(config.board[i][j]):
+                if config.is_black(config.Location(i, j)):
+                    if config.is_king(config.Location(i, j)):
                         board.blit(self.black_king, (self.mapIndexToCoord(i, j)))
                     else:
                         board.blit(self.black_pawn, (self.mapIndexToCoord(i, j)))
-                elif config.is_white(config.board[i][j]):
-                    if config.is_king(config.board[i][j]):
+                elif config.is_white(config.Location(i, j)):
+                    if config.is_king(config.Location(i, j)):
                         board.blit(self.white_king, (self.mapIndexToCoord(i, j)))
                     else:
                         board.blit(self.white_pawn, (self.mapIndexToCoord(i, j)))
